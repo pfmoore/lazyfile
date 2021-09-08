@@ -1,39 +1,5 @@
 import io
-from spans import intrange, intrangeset
-
-
-# SparseBytes
-# ===========
-#
-# size = N
-# blocks = [(lo, hi, bytes), ...]
-# filled = intrangeset(intrange(lo, hi) for lo, hi, _ in blocks)
-# gaps = intrangeset(intrange(0, N)).difference(filled)
-#
-# ensure(lo, hi):
-#     need = gaps.intersection(intrangeset([intrange(lo, hi)]))
-#     for part_lo, part_hi in need:
-#         part = get_bytes(part_lo, part_hi)
-#         blocks.append((part_lo, part_hi, part))
-#     coalesce(blocks)
-#
-# coalesce(blocks):
-#     # Re-sort blocks, merging adjacent chunks
-#     blocks.sort()
-#     lo, hi, chunk = blocks.pop(0)
-#     new_blocks = []
-#     while blocks:
-#         next_lo, next_hi, next_chunk = blocks.pop(0)
-#         if hi == next_lo:
-#             # Merge
-#             hi = next_hi
-#             chunk += next_chunk
-#         else:
-#             new_blocks.append((lo, hi, chunk))
-#             lo, hi, chunk = next_lo, next_hi, next_chunk
-#     new_blocks.append((lo, hi, chunk))
-#     return new_blocks
-
+from .sparsebytes import SparseBytes
 
 
 class LazyFile(io.RawIOBase):
@@ -84,26 +50,12 @@ class LazyFile(io.RawIOBase):
 class LazyBufferedFile(LazyFile):
     def __init__(self, size, getter):
         self.size = size
-        self.getter = getter
-        self.blocks = {}
+        self.buffer = SparseBytes(size, getter)
         super().__init__()
     def get_size(self):
         return self.size
-    def ensure(self, start, end):
-        cached = intrangeset(intrange(start, end) for start, end in self.blocks)
-        if intrange(start, end) in cached:
-            return
-        for range in intrangeset([intrange(start, end)]).difference(cached):
-            lo = range.lower
-            hi = range.upper
-            block = self.getter(lo, hi)
-            self.blocks[(lo, hi)] = block
     def get_data(self, start, end):
-        self.ensure(start, end)
-        for lo, hi in sorted(self.blocks):
-            if intrange(start, end):
-                pass
-
+        return self.buffer[start:end]
 
 
 class MyLazyFile(LazyFile):
