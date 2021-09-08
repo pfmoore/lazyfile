@@ -1,5 +1,5 @@
 from spans import intrange, intrangeset
-
+import operator
 
 # SparseBytes
 # ===========
@@ -79,12 +79,23 @@ class SparseBytes:
         return self.size
 
     def __getitem__(self, key):
-        if isinstance(key, slice):
-            lo, hi, step = key.indices(self.size)
-        else:
-            lo, hi, step = slice(key, key, 1).indices(self.size)
-            hi = lo + 1
-        # Special case 0-byte request
+        if not isinstance(key, slice):
+            key = operator.index(key)
+            if key < 0:
+                key = self.size + key
+            if not (0 <= key < self.size):
+                raise IndexError("index out of range")
+            self.ensure(key, key + 1)
+            for lo, hi, part in self.blocks:
+                if lo <= key < hi:
+                    return part[key - lo]
+            else:
+                raise RuntimeError("Failed to ensure requested byte")
+
+        # If we get here, it's a slice request
+        lo, hi, step = key.indices(self.size)
+
+        # Special case 0-byte request, as there's nothing to get
         if hi == lo:
             return b''
 
