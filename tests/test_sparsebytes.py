@@ -1,5 +1,4 @@
-from lazyfile.sparsebytes import SparseBytes
-from spans import intrange, intrangeset
+from lazyfile.sparsebytes import SparseBytes, InvalidGetter
 import pytest
 
 def test_simple():
@@ -38,10 +37,20 @@ def test_index_error():
         # Not clear why this doesn't end up with a block (99, 100, b'')
         assert not sb.blocks
 
-def test_coalesce():
+def test_coalesce_empty_list():
     data = b'Hello, world!'
     def get_data(lo, hi):
         return data[lo:hi]
     sb = SparseBytes(len(data), get_data)
     sb._coalesce()
     assert len(sb.blocks) == 0
+
+def test_bad_getdata():
+    # Getter returns incorrect size of block
+    def get_data(lo, hi):
+        return b''
+    sb = SparseBytes(10, get_data)
+    with pytest.raises(InvalidGetter):
+        _ = sb[1]
+    with pytest.raises(InvalidGetter):
+        _ = sb[1:2]

@@ -2,6 +2,9 @@ from spans import intrange, intrangeset
 import operator
 
 
+class InvalidGetter(Exception):
+    """Raised when a getter doesn't conform to requirements"""
+
 class SparseBytes:
     """A byte array that is loaded "on demand".
 
@@ -20,6 +23,16 @@ class SparseBytes:
         # as large as possible, so there is always a gap between
         # any pair of blocks.
         self.blocks = []
+
+    def _get(self, lo, hi):
+        """Get data. Ensures the result is the right length.
+
+        If the getter raises an exception, this is passed on to the caller.
+        """
+        result = self.getter(lo, hi)
+        if len(result) != hi - lo:
+            raise InvalidGetter(f"Requested {hi-lo} bytes, got {len(result)}")
+        return result
 
     def _coalesce(self):
         # Re-establish the invariant that self.blocks is sorted,
@@ -64,7 +77,7 @@ class SparseBytes:
         for part_range in need:
             part_lo = part_range.lower
             part_hi = part_range.upper
-            part = self.getter(part_lo, part_hi)
+            part = self._get(part_lo, part_hi)
             self.blocks.append((part_lo, part_hi, part))
 
         self._coalesce()
@@ -93,8 +106,9 @@ class SparseBytes:
             for lo, hi, part in self.blocks:
                 if lo <= key < hi:
                     return part[key - lo]
-            else:
-                raise RuntimeError("Failed to ensure requested byte")
+
+            # We should never fall off the end of the loop
+            assert False, "Failed to ensure requested byte"  # pragma: no cover
 
         # If we get here, it's a slice request
         # Get the byte range and step in normalised form
@@ -116,7 +130,7 @@ class SparseBytes:
                 assert hi <= h, "Failed to ensure a single block"
                 result = data[lo - l : hi - l : step]
                 break
-        else:
-            raise RuntimeError("Failed to ensure requested byte")
-
+        # We should always find something, as that's the contract
+        # for ensure.
+        assert result is not None, "Failed to ensure requested bytes"
         return result

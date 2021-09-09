@@ -3,17 +3,10 @@ from .sparsebytes import SparseBytes
 
 
 class LazyFile(io.RawIOBase):
-    def __init__(self):
+    def __init__(self, size, getter):
         self.pos = 0
-        # Cache this as it may be costly to compute
-        self.end = self.get_size()
-    def get_size(self):
-        # Subclasses implement this
-        raise NotImplemented
-    def get_data(self, start, end):
-        # Subclasses implement this
-        # Start and end are guaranteed in range
-        raise NotImplemented
+        self.end = size
+        self.buffer = SparseBytes(size, getter)
     def clamp(self, target):
         if target < 0:
             return 0
@@ -33,7 +26,7 @@ class LazyFile(io.RawIOBase):
             end = self.clamp(self.pos + size)
         start = self.pos
         self.pos = end
-        return self.get_data(start, end)
+        return self.buffer[start:end]
     def seek(self, offset, whence=io.SEEK_SET):
         if whence == io.SEEK_SET:
             target = offset
@@ -47,28 +40,11 @@ class LazyFile(io.RawIOBase):
         # Not necessary, default uses seek()
         return self.pos
 
-class LazyBufferedFile(LazyFile):
-    def __init__(self, size, getter):
-        self.size = size
-        self.buffer = SparseBytes(size, getter)
-        super().__init__()
-    def get_size(self):
-        return self.size
-    def get_data(self, start, end):
-        return self.buffer[start:end]
-
-
-class MyLazyFile(LazyFile):
-    def __init__(self, data):
-        self.data = data
-        super().__init__()
-    def get_size(self):
-        return len(self.data)
-    def get_data(self, start, end):
-        return self.data[start:end]
-
-if __name__ == "__main__":
-    f = MyLazyFile(b"Hello,\nworld")
+if __name__ == "__main__":  # pragma: no cover
+    data = b"Hello,\nworld"
+    def getter(start, end):
+        return data[start:end]
+    f = LazyFile(len(data), getter)
     print(f.readall())
     #print(f.fileno()) UnsupportedOperation
     print("Isatty:", f.isatty())
