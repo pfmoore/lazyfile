@@ -1,43 +1,25 @@
 from spans import intrange, intrangeset
 import operator
 
-# SparseBytes
-# ===========
-#
-# size = N
-# blocks = [(lo, hi, bytes), ...]
-# filled = intrangeset(intrange(lo, hi) for lo, hi, _ in blocks)
-# gaps = intrangeset(intrange(0, N)).difference(filled)
-#
-# ensure(lo, hi):
-#     need = gaps.intersection(intrangeset([intrange(lo, hi)]))
-#     for part_lo, part_hi in need:
-#         part = get_bytes(part_lo, part_hi)
-#         blocks.append((part_lo, part_hi, part))
-#     coalesce(blocks)
-#
-# coalesce(blocks):
-#     # Re-sort blocks, merging adjacent chunks
-#     blocks.sort()
-#     lo, hi, chunk = blocks.pop(0)
-#     new_blocks = []
-#     while blocks:
-#         next_lo, next_hi, next_chunk = blocks.pop(0)
-#         if hi == next_lo:
-#             # Merge
-#             hi = next_hi
-#             chunk += next_chunk
-#         else:
-#             new_blocks.append((lo, hi, chunk))
-#             lo, hi, chunk = next_lo, next_hi, next_chunk
-#     new_blocks.append((lo, hi, chunk))
-#     return new_blocks
 
 class SparseBytes:
+    """A byte array that is loaded "on demand".
+
+    An indexable array of bytes that only requests the actual
+    bytes of data from the underlying data source when required.
+    """
     def __init__(self, size, getter):
         self.size = size
-        self.blocks = []
         self.getter = getter
+
+        # A list of blocks of data that have been loaded.
+        # The list contains tuples, (lo, hi, chunk). Each entry
+        # holds the data for range lo:hi in the array.
+        # Blocks are sorted in ascending order of starting index,
+        # no two blocks overlap and in addition, all blocks are
+        # as large as possible, so there is always a gap between
+        # any pair of blocks.
+        self.blocks = []
 
     def _coalesce(self):
         # Re-establish the invariant that self.blocks is sorted,
@@ -47,14 +29,17 @@ class SparseBytes:
             # Nothing to do
             return
 
+        # Ensure blocks are ordered correctly
         self.blocks.sort()
+
+        # Merge any adjacent pairs of blocks with no gap between them
         blocks = self.blocks
         new_blocks = []
         lo, hi, chunk = blocks.pop(0)
         while blocks:
             next_lo, next_hi, next_chunk = blocks.pop(0)
             if hi == next_lo:
-                # Merge two adhacent chunks
+                # Merge two adjacent chunks
                 hi = next_hi
                 chunk += next_chunk
             else:
@@ -66,26 +51,45 @@ class SparseBytes:
         self.blocks = new_blocks
 
     def ensure(self, lo, hi):
+        """Ensure that the range lo:hi is loaded"""
+
+        # Calculate the set of ranges that we need which are not
+        # already loaded
         need = intrangeset([intrange(lo, hi)])
         need = need.difference(intrangeset(intrange(l, h) for l, h, _ in self.blocks))
+
+        # Get each needed block and add it to the block list. At
+        # this point, just append it at the end, we will re-establish
+        # the invariant once we are finished.
         for part_range in need:
             part_lo = part_range.lower
             part_hi = part_range.upper
             part = self.getter(part_lo, part_hi)
             self.blocks.append((part_lo, part_hi, part))
+
         self._coalesce()
 
     def __len__(self):
+        """The length of the array"""
         return self.size
 
     def __getitem__(self, key):
+        """Get data from the array"""
+
+        # Are we reading a single item, rather than a range?
         if not isinstance(key, slice):
             key = operator.index(key)
+
+            # Handle negative indices, then make sure the request is in range
             if key < 0:
                 key = self.size + key
             if not (0 <= key < self.size):
                 raise IndexError("index out of range")
+
+            # Make sure the requested byte is present
             self.ensure(key, key + 1)
+
+            # Find the correct data block and return the requested byte
             for lo, hi, part in self.blocks:
                 if lo <= key < hi:
                     return part[key - lo]
@@ -93,19 +97,26 @@ class SparseBytes:
                 raise RuntimeError("Failed to ensure requested byte")
 
         # If we get here, it's a slice request
+        # Get the byte range and step in normalised form
         lo, hi, step = key.indices(self.size)
 
         # Special case 0-byte request, as there's nothing to get
         if hi == lo:
             return b''
 
+        # Make sure we have the required range. Note that the
+        # invariant for self.blocks means that the resulting range
+        # will be completely within one element of the blocks array.
         self.ensure(lo, hi)
+
+        # Find the correct block and extract the requested data
         result = None
         for l, h, data in self.blocks:
             if l <= lo < h:
                 assert hi <= h, "Failed to ensure a single block"
                 result = data[lo - l : hi - l : step]
                 break
+        else:
+            raise RuntimeError("Failed to ensure requested byte")
 
-        assert result is not None, "Failed to load requested bytes"
         return result
