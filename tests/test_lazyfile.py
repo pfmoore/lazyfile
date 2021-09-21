@@ -1,10 +1,14 @@
-from lazyfile import LazyFile
 import io
 
+from lazyfile import LazyFile
+
+
 def test_simple():
-    data = b'Hello, world!'
+    data = b"Hello, world!"
+
     def get_data(lo, hi):
         return data[lo:hi]
+
     with LazyFile(len(data), get_data) as f:
         assert f.readable()
         assert f.seekable()
@@ -19,17 +23,23 @@ def test_simple():
         assert f.tell() == 0
         assert f.read() == data
 
+
 def test_long_read():
-    data = b'Hello, world!'
+    data = b"Hello, world!"
+
     def get_data(lo, hi):
         return data[lo:hi]
+
     with LazyFile(len(data), get_data) as f:
         assert f.read(1000) == data
 
+
 def test_out_of_range():
-    data = b'Hello, world!'
+    data = b"Hello, world!"
+
     def get_data(lo, hi):
         return data[lo:hi]
+
     with LazyFile(len(data), get_data) as f:
         f.seek(1000)
         assert f.tell() == len(data)

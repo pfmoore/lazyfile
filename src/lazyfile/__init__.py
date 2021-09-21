@@ -1,14 +1,15 @@
 from .lazyfile import LazyFile
 from .sparsebytes import SparseBytes
 
-
 if __name__ == "__main__":  # pragma: no cover
     data = b"Hello,\nworld"
+
     def getter(start, end):
         return data[start:end]
+
     f = LazyFile(len(data), getter)
     print(f.readall())
-    #print(f.fileno()) UnsupportedOperation
+    # print(f.fileno()) UnsupportedOperation
     print("Isatty:", f.isatty())
     print("Seekable:", f.seekable())
     print("Readable:", f.readable())
@@ -16,8 +17,8 @@ if __name__ == "__main__":  # pragma: no cover
     f.seek(0)
     print(list(f.readlines()))
     print(f.tell())
-    #f.truncate()
-    #f.writelines(["a"])
+    # f.truncate()
+    # f.writelines(["a"])
     f.flush()
     print("Closed:", f.closed)
     f.close()

@@ -1,4 +1,5 @@
 import io
+
 from .sparsebytes import SparseBytes
 
 
@@ -7,18 +8,22 @@ class LazyFile(io.RawIOBase):
         self.pos = 0
         self.end = size
         self.buffer = SparseBytes(size, getter)
+
     def clamp(self, target):
         if target < 0:
             return 0
         if target > self.end:
             return self.end
         return target
+
     def readable(self):
         # Defaults to False
         return True
+
     def seekable(self):
         # Defaults to False
         return True
+
     def read(self, size=-1):
         if size == -1:
             end = self.end
@@ -27,6 +32,7 @@ class LazyFile(io.RawIOBase):
         start = self.pos
         self.pos = end
         return self.buffer[start:end]
+
     def seek(self, offset, whence=io.SEEK_SET):
         if whence == io.SEEK_SET:
             target = offset
@@ -36,6 +42,7 @@ class LazyFile(io.RawIOBase):
             target = self.end + offset
         self.pos = self.clamp(target)
         return self.pos
+
     def tell(self):
         # Not necessary, default uses seek()
         return self.pos

@@ -1,9 +1,11 @@
-from spans import intrange, intrangeset
 import operator
+
+from spans import intrange, intrangeset
 
 
 class InvalidGetter(Exception):
     """Raised when a getter doesn't conform to requirements"""
+
 
 class SparseBytes:
     """A byte array that is loaded "on demand".
@@ -11,6 +13,7 @@ class SparseBytes:
     An indexable array of bytes that only requests the actual
     bytes of data from the underlying data source when required.
     """
+
     def __init__(self, size, getter):
         self.size = size
         self.getter = getter
@@ -116,7 +119,7 @@ class SparseBytes:
 
         # Special case 0-byte request, as there's nothing to get
         if hi == lo:
-            return b''
+            return b""
 
         # Make sure we have the required range. Note that the
         # invariant for self.blocks means that the resulting range
